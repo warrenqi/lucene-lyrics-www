@@ -22,25 +22,37 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.PriorityQueue;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.BytesRef;
 
 /** Simple command-line based search demo. */
-public class SearchFiles
+public class SearchLyrics
 {
 
-    private SearchFiles()
+    private SearchLyrics()
     {
     }
 
@@ -100,6 +112,9 @@ public class SearchFiles
         }
 
         IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(index)));
+
+        topWordsTfidf(reader);
+
         IndexSearcher searcher = new IndexSearcher(reader);
         Analyzer analyzer = new StandardAnalyzer();
 
@@ -146,7 +161,8 @@ public class SearchFiles
                 System.out.println("Time: " + (end.getTime() - start.getTime()) + "ms");
             }
 
-            doPagingSearch(in, searcher, query, hitsPerPage, raw, queries == null && queryString == null);
+            doPagingSearch(in, searcher, query, hitsPerPage, raw,
+                           queries == null && queryString == null);
 
             if (queryString != null)
             {
@@ -154,6 +170,68 @@ public class SearchFiles
             }
         }
         reader.close();
+    }
+
+    static void topWordsTfidf(IndexReader reader) throws IOException
+    {
+        List<Terms> allTerms = new ArrayList<Terms>();
+        List<LeafReaderContext> leaves = reader.leaves();
+        long totalDocCount = 0L;
+        long totalTermFreqCount = 0L;
+        for (LeafReaderContext leafCtx : leaves)
+        {
+            LeafReader leafReader = leafCtx.reader();
+            Terms contentTerms = leafReader.terms("contents");
+
+            // TODO wqi
+            // leafReader.getTermVector(docID, field)
+
+            allTerms.add(contentTerms);
+            totalDocCount += leafReader.getSumDocFreq("contents");
+            totalTermFreqCount += leafReader.getSumTotalTermFreq("contents");
+        }
+        System.out.println("total number of leafReaders = " + leaves.size());
+
+        Map<String, Integer> docFreqs = new HashMap<>();
+        Map<String, Long> termFreqs = new HashMap<>();
+        for (Terms terms : allTerms)
+        {
+            TermsEnum termIter = terms.iterator();
+            BytesRef text;
+            while ((text = termIter.next()) != null)
+            {
+                int docFreq = termIter.docFreq();
+                docFreqs.merge(text.utf8ToString(), termIter.docFreq(), Integer::sum);
+                long totalTermFreq = termIter.totalTermFreq();
+                termFreqs.merge(text.utf8ToString(), termIter.totalTermFreq(), Long::sum);
+            }
+        }
+        Map<String, Float> tfidf = new HashMap<>();
+        for (String term : termFreqs.keySet())
+        {
+            float termFreq = (float) termFreqs.get(term) / totalTermFreqCount;
+            float docFreq = (float) docFreqs.get(term) / totalDocCount;
+            tfidf.put(term, termFreq * ((float) Math.log(1.0F / docFreq)));
+        }
+
+        PriorityQueue<Entry<String, Float>> queue = new PriorityQueue<Entry<String, Float>>(new Comparator<Entry<String, Float>>()
+            {
+                @Override
+                public int compare(Entry<String, Float> o1, Entry<String, Float> o2)
+                {
+                    return (-1) * Float.compare(o1.getValue(), o2.getValue());
+                }
+            });
+        queue.addAll(tfidf.entrySet());
+
+        System.out.println("Top words by TF/IDF =");
+        int topwords = 0;
+        while (queue.peek() != null && topwords < 25)
+        {
+            System.out.print(queue.remove() + ", ");
+            topwords++;
+        }
+        System.out.println();
     }
 
     /**
@@ -167,8 +245,8 @@ public class SearchFiles
      * collected.
      * 
      */
-    public static void doPagingSearch(BufferedReader in, IndexSearcher searcher, Query query, int hitsPerPage,
-            boolean raw, boolean interactive) throws IOException
+    public static void doPagingSearch(BufferedReader in, IndexSearcher searcher, Query query,
+            int hitsPerPage, boolean raw, boolean interactive) throws IOException
     {
 
         // Collect enough docs to show 5 pages

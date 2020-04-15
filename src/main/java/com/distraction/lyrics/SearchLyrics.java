@@ -174,11 +174,11 @@ public class SearchLyrics
 
     static void topWordsTfidf(IndexReader reader) throws IOException
     {
-        List<Terms> allTerms = new ArrayList<Terms>();
-        List<LeafReaderContext> leaves = reader.leaves();
-        long totalDocCount = 0L;
-        long totalTermFreqCount = 0L;
-        for (LeafReaderContext leafCtx : leaves)
+        List<Terms> allTermsFromLeafReaders = new ArrayList<Terms>();
+        List<LeafReaderContext> leafContexts = reader.leaves();
+        int sumDocCount = 0;
+        long sumTermOccurenceCount = 0L;
+        for (LeafReaderContext leafCtx : leafContexts)
         {
             LeafReader leafReader = leafCtx.reader();
             Terms contentTerms = leafReader.terms("contents");
@@ -186,32 +186,36 @@ public class SearchLyrics
             // TODO wqi
             // leafReader.getTermVector(docID, field)
 
-            allTerms.add(contentTerms);
-            totalDocCount += leafReader.getSumDocFreq("contents");
-            totalTermFreqCount += leafReader.getSumTotalTermFreq("contents");
+            allTermsFromLeafReaders.add(contentTerms);
+            sumDocCount += leafReader.getDocCount("contents");
+            sumTermOccurenceCount += leafReader.getSumTotalTermFreq("contents");
         }
-        System.out.println("total number of leafReaders = " + leaves.size());
+        System.out.println("total number of leafReaders = " + leafContexts.size());
+        System.out.println("total number of docs = " + sumDocCount);
+        System.out.println("total TermOccurence count (word count) = " + sumTermOccurenceCount);
 
-        Map<String, Integer> docFreqs = new HashMap<>();
-        Map<String, Long> termFreqs = new HashMap<>();
-        for (Terms terms : allTerms)
+        Map<String, Integer> countOfDocsWithTerm = new HashMap<>();
+        Map<String, Long> termOccurenceCount = new HashMap<>();
+        for (Terms terms : allTermsFromLeafReaders)
         {
             TermsEnum termIter = terms.iterator();
             BytesRef text;
             while ((text = termIter.next()) != null)
             {
                 int docFreq = termIter.docFreq();
-                docFreqs.merge(text.utf8ToString(), termIter.docFreq(), Integer::sum);
+                countOfDocsWithTerm.merge(text.utf8ToString(), termIter.docFreq(), Integer::sum);
                 long totalTermFreq = termIter.totalTermFreq();
-                termFreqs.merge(text.utf8ToString(), termIter.totalTermFreq(), Long::sum);
+                termOccurenceCount.merge(text.utf8ToString(), termIter.totalTermFreq(), Long::sum);
             }
         }
         Map<String, Float> tfidf = new HashMap<>();
-        for (String term : termFreqs.keySet())
+        for (String term : termOccurenceCount.keySet())
         {
-            float termFreq = (float) termFreqs.get(term) / totalTermFreqCount;
-            float docFreq = (float) docFreqs.get(term) / totalDocCount;
-            tfidf.put(term, termFreq * ((float) Math.log(1.0F / docFreq)));
+            float termFreq = (float) termOccurenceCount.get(term) / sumTermOccurenceCount;
+            float docFreq = (float) countOfDocsWithTerm.get(term) / sumDocCount;
+            float idf = (float) Math.log10(1.0F / docFreq);
+            tfidf.put(term, termFreq * idf);
+            // System.out.println("term:" + term + "\t tf=" + termFreq + "\t idf=" + idf );
         }
 
         PriorityQueue<Entry<String, Float>> queue = new PriorityQueue<Entry<String, Float>>(new Comparator<Entry<String, Float>>()

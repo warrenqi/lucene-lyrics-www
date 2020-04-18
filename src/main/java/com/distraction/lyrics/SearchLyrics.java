@@ -49,318 +49,273 @@ import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.BytesRef;
 
 /** Simple command-line based search demo. */
-public class SearchLyrics
-{
+public class SearchLyrics {
 
-    private SearchLyrics()
-    {
+  private SearchLyrics() {}
+
+  /** Simple command-line based search demo. */
+  public static void main(String[] args) throws Exception {
+    String usage =
+        "Usage:\tjava org.apache.lucene.demo.SearchFiles [-index dir] [-field f] [-repeat n] [-queries file] [-query string] [-raw] [-paging hitsPerPage]\n\nSee http://lucene.apache.org/core/4_1_0/demo/ for details.";
+    if (args.length > 0 && ("-h".equals(args[0]) || "-help".equals(args[0]))) {
+      System.out.println(usage);
+      System.exit(0);
     }
 
-    /** Simple command-line based search demo. */
-    public static void main(String[] args) throws Exception
-    {
-        String usage = "Usage:\tjava org.apache.lucene.demo.SearchFiles [-index dir] [-field f] [-repeat n] [-queries file] [-query string] [-raw] [-paging hitsPerPage]\n\nSee http://lucene.apache.org/core/4_1_0/demo/ for details.";
-        if (args.length > 0 && ("-h".equals(args[0]) || "-help".equals(args[0])))
-        {
-            System.out.println(usage);
-            System.exit(0);
+    String index = "index";
+    String field = "contents";
+    String queries = null;
+    int repeat = 0;
+    boolean raw = false;
+    String queryString = null;
+    int hitsPerPage = 10;
+
+    for (int i = 0; i < args.length; i++) {
+      if ("-index".equals(args[i])) {
+        index = args[i + 1];
+        i++;
+      } else if ("-field".equals(args[i])) {
+        field = args[i + 1];
+        i++;
+      } else if ("-queries".equals(args[i])) {
+        queries = args[i + 1];
+        i++;
+      } else if ("-query".equals(args[i])) {
+        queryString = args[i + 1];
+        i++;
+      } else if ("-repeat".equals(args[i])) {
+        repeat = Integer.parseInt(args[i + 1]);
+        i++;
+      } else if ("-raw".equals(args[i])) {
+        raw = true;
+      } else if ("-paging".equals(args[i])) {
+        hitsPerPage = Integer.parseInt(args[i + 1]);
+        if (hitsPerPage <= 0) {
+          System.err.println("There must be at least 1 hit per page.");
+          System.exit(1);
         }
-
-        String index = "index";
-        String field = "contents";
-        String queries = null;
-        int repeat = 0;
-        boolean raw = false;
-        String queryString = null;
-        int hitsPerPage = 10;
-
-        for (int i = 0; i < args.length; i++)
-        {
-            if ("-index".equals(args[i]))
-            {
-                index = args[i + 1];
-                i++;
-            } else if ("-field".equals(args[i]))
-            {
-                field = args[i + 1];
-                i++;
-            } else if ("-queries".equals(args[i]))
-            {
-                queries = args[i + 1];
-                i++;
-            } else if ("-query".equals(args[i]))
-            {
-                queryString = args[i + 1];
-                i++;
-            } else if ("-repeat".equals(args[i]))
-            {
-                repeat = Integer.parseInt(args[i + 1]);
-                i++;
-            } else if ("-raw".equals(args[i]))
-            {
-                raw = true;
-            } else if ("-paging".equals(args[i]))
-            {
-                hitsPerPage = Integer.parseInt(args[i + 1]);
-                if (hitsPerPage <= 0)
-                {
-                    System.err.println("There must be at least 1 hit per page.");
-                    System.exit(1);
-                }
-                i++;
-            }
-        }
-
-        IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(index)));
-
-        topWordsTfidf(reader);
-
-        IndexSearcher searcher = new IndexSearcher(reader);
-        Analyzer analyzer = new StandardAnalyzer();
-
-        BufferedReader in = null;
-        if (queries != null)
-        {
-            in = Files.newBufferedReader(Paths.get(queries), StandardCharsets.UTF_8);
-        } else
-        {
-            in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
-        }
-        QueryParser parser = new QueryParser(field, analyzer);
-        while (true)
-        {
-            if (queries == null && queryString == null)
-            { // prompt the user
-                System.out.println("Enter query: ");
-            }
-
-            String line = queryString != null ? queryString : in.readLine();
-
-            if (line == null || line.length() == -1)
-            {
-                break;
-            }
-
-            line = line.trim();
-            if (line.length() == 0)
-            {
-                break;
-            }
-
-            Query query = parser.parse(line);
-            System.out.println("Searching for: " + query.toString(field));
-
-            if (repeat > 0)
-            { // repeat & time as benchmark
-                Date start = new Date();
-                for (int i = 0; i < repeat; i++)
-                {
-                    searcher.search(query, 100);
-                }
-                Date end = new Date();
-                System.out.println("Time: " + (end.getTime() - start.getTime()) + "ms");
-            }
-
-            doPagingSearch(in, searcher, query, hitsPerPage, raw,
-                           queries == null && queryString == null);
-
-            if (queryString != null)
-            {
-                break;
-            }
-        }
-        reader.close();
+        i++;
+      }
     }
 
-    static void topWordsTfidf(IndexReader reader) throws IOException
-    {
-        List<Terms> allTermsFromLeafReaders = new ArrayList<Terms>();
-        List<LeafReaderContext> leafContexts = reader.leaves();
-        int sumDocCount = 0;
-        long sumTermOccurenceCount = 0L;
-        for (LeafReaderContext leafCtx : leafContexts)
-        {
-            LeafReader leafReader = leafCtx.reader();
-            Terms contentTerms = leafReader.terms("contents");
+    IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(index)));
 
-            // TODO wqi
-            // leafReader.getTermVector(docID, field)
+    topWordsTfidf(reader);
 
-            allTermsFromLeafReaders.add(contentTerms);
-            sumDocCount += leafReader.getDocCount("contents");
-            sumTermOccurenceCount += leafReader.getSumTotalTermFreq("contents");
+    IndexSearcher searcher = new IndexSearcher(reader);
+    Analyzer analyzer = new StandardAnalyzer();
+
+    BufferedReader in = null;
+    if (queries != null) {
+      in = Files.newBufferedReader(Paths.get(queries), StandardCharsets.UTF_8);
+    } else {
+      in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
+    }
+    QueryParser parser = new QueryParser(field, analyzer);
+    while (true) {
+      if (queries == null && queryString == null) { // prompt the user
+        System.out.println("Enter query: ");
+      }
+
+      String line = queryString != null ? queryString : in.readLine();
+
+      if (line == null || line.length() == -1) {
+        break;
+      }
+
+      line = line.trim();
+      if (line.length() == 0) {
+        break;
+      }
+
+      Query query = parser.parse(line);
+      System.out.println("Searching for: " + query.toString(field));
+
+      if (repeat > 0) { // repeat & time as benchmark
+        Date start = new Date();
+        for (int i = 0; i < repeat; i++) {
+          searcher.search(query, 100);
         }
-        System.out.println("total number of leafReaders = " + leafContexts.size());
-        System.out.println("total number of docs = " + sumDocCount);
-        System.out.println("total TermOccurence count (word count) = " + sumTermOccurenceCount);
+        Date end = new Date();
+        System.out.println("Time: " + (end.getTime() - start.getTime()) + "ms");
+      }
 
-        Map<String, Integer> countOfDocsWithTerm = new HashMap<>();
-        Map<String, Long> termOccurenceCount = new HashMap<>();
-        for (Terms terms : allTermsFromLeafReaders)
-        {
-            TermsEnum termIter = terms.iterator();
-            BytesRef text;
-            while ((text = termIter.next()) != null)
-            {
-                int docFreq = termIter.docFreq();
-                countOfDocsWithTerm.merge(text.utf8ToString(), termIter.docFreq(), Integer::sum);
-                long totalTermFreq = termIter.totalTermFreq();
-                termOccurenceCount.merge(text.utf8ToString(), termIter.totalTermFreq(), Long::sum);
-            }
-        }
-        Map<String, Float> tfidf = new HashMap<>();
-        for (String term : termOccurenceCount.keySet())
-        {
-            float termFreq = (float) termOccurenceCount.get(term) / sumTermOccurenceCount;
-            float docFreq = (float) countOfDocsWithTerm.get(term) / sumDocCount;
-            float idf = (float) Math.log10(1.0F / docFreq);
-            tfidf.put(term, termFreq * idf);
-            // System.out.println("term:" + term + "\t tf=" + termFreq + "\t idf=" + idf );
-        }
+      doPagingSearch(in, searcher, query, hitsPerPage, raw, queries == null && queryString == null);
 
-        PriorityQueue<Entry<String, Float>> queue = new PriorityQueue<Entry<String, Float>>(new Comparator<Entry<String, Float>>()
-            {
-                @Override
-                public int compare(Entry<String, Float> o1, Entry<String, Float> o2)
-                {
-                    return (-1) * Float.compare(o1.getValue(), o2.getValue());
-                }
+      if (queryString != null) {
+        break;
+      }
+    }
+    reader.close();
+  }
+
+  static void topWordsTfidf(IndexReader reader) throws IOException {
+    List<Terms> allTermsFromLeafReaders = new ArrayList<Terms>();
+    List<LeafReaderContext> leafContexts = reader.leaves();
+    int sumDocCount = 0;
+    long sumTermOccurenceCount = 0L;
+    for (LeafReaderContext leafCtx : leafContexts) {
+      LeafReader leafReader = leafCtx.reader();
+      Terms contentTerms = leafReader.terms("contents");
+
+      // TODO wqi
+      // leafReader.getTermVector(docID, field)
+
+      allTermsFromLeafReaders.add(contentTerms);
+      sumDocCount += leafReader.getDocCount("contents");
+      sumTermOccurenceCount += leafReader.getSumTotalTermFreq("contents");
+    }
+    System.out.println("total number of leafReaders = " + leafContexts.size());
+    System.out.println("total number of docs = " + sumDocCount);
+    System.out.println("total TermOccurence count (word count) = " + sumTermOccurenceCount);
+
+    Map<String, Integer> countOfDocsWithTerm = new HashMap<>();
+    Map<String, Long> termOccurenceCount = new HashMap<>();
+    for (Terms terms : allTermsFromLeafReaders) {
+      TermsEnum termIter = terms.iterator();
+      BytesRef text;
+      while ((text = termIter.next()) != null) {
+        int docFreq = termIter.docFreq();
+        countOfDocsWithTerm.merge(text.utf8ToString(), termIter.docFreq(), Integer::sum);
+        long totalTermFreq = termIter.totalTermFreq();
+        termOccurenceCount.merge(text.utf8ToString(), termIter.totalTermFreq(), Long::sum);
+      }
+    }
+    Map<String, Float> tfidf = new HashMap<>();
+    for (String term : termOccurenceCount.keySet()) {
+      float termFreq = (float) termOccurenceCount.get(term) / sumTermOccurenceCount;
+      float docFreq = (float) countOfDocsWithTerm.get(term) / sumDocCount;
+      float idf = (float) Math.log10(1.0F / docFreq);
+      tfidf.put(term, termFreq * idf);
+      // System.out.println("term:" + term + "\t tf=" + termFreq + "\t idf=" + idf );
+    }
+
+    PriorityQueue<Entry<String, Float>> queue =
+        new PriorityQueue<Entry<String, Float>>(
+            new Comparator<Entry<String, Float>>() {
+              @Override
+              public int compare(Entry<String, Float> o1, Entry<String, Float> o2) {
+                return (-1) * Float.compare(o1.getValue(), o2.getValue());
+              }
             });
-        queue.addAll(tfidf.entrySet());
+    queue.addAll(tfidf.entrySet());
 
-        System.out.println("Top words by TF/IDF =");
-        int topwords = 0;
-        while (queue.peek() != null && topwords < 25)
-        {
-            System.out.print(queue.remove() + ", ");
-            topwords++;
-        }
-        System.out.println();
+    System.out.println("Top words by TF/IDF =");
+    int topwords = 0;
+    while (queue.peek() != null && topwords < 25) {
+      System.out.print(queue.remove() + ", ");
+      topwords++;
     }
+    System.out.println();
+  }
 
-    /**
-     * This demonstrates a typical paging search scenario, where the search
-     * engine presents pages of size n to the user. The user can then go to the
-     * next page if interested in the next hits.
-     * 
-     * When the query is executed for the first time, then only enough results
-     * are collected to fill 5 result pages. If the user wants to page beyond
-     * this limit, then the query is executed another time and all hits are
-     * collected.
-     * 
-     */
-    public static void doPagingSearch(BufferedReader in, IndexSearcher searcher, Query query,
-            int hitsPerPage, boolean raw, boolean interactive) throws IOException
-    {
+  /**
+   * This demonstrates a typical paging search scenario, where the search engine presents pages of
+   * size n to the user. The user can then go to the next page if interested in the next hits.
+   *
+   * <p>When the query is executed for the first time, then only enough results are collected to
+   * fill 5 result pages. If the user wants to page beyond this limit, then the query is executed
+   * another time and all hits are collected.
+   */
+  public static void doPagingSearch(
+      BufferedReader in,
+      IndexSearcher searcher,
+      Query query,
+      int hitsPerPage,
+      boolean raw,
+      boolean interactive)
+      throws IOException {
 
-        // Collect enough docs to show 5 pages
-        TopDocs results = searcher.search(query, 5 * hitsPerPage);
-        ScoreDoc[] hits = results.scoreDocs;
+    // Collect enough docs to show 5 pages
+    TopDocs results = searcher.search(query, 5 * hitsPerPage);
+    ScoreDoc[] hits = results.scoreDocs;
 
-        int numTotalHits = Math.toIntExact(results.totalHits.value);
-        System.out.println(numTotalHits + " total matching documents");
+    int numTotalHits = Math.toIntExact(results.totalHits.value);
+    System.out.println(numTotalHits + " total matching documents");
 
-        int start = 0;
-        int end = Math.min(numTotalHits, hitsPerPage);
+    int start = 0;
+    int end = Math.min(numTotalHits, hitsPerPage);
 
-        while (true)
-        {
-            if (end > hits.length)
-            {
-                System.out.println("Only results 1 - " + hits.length + " of " + numTotalHits
-                        + " total matching documents collected.");
-                System.out.println("Collect more (y/n) ?");
-                String line = in.readLine();
-                if (line.length() == 0 || line.charAt(0) == 'n')
-                {
-                    break;
-                }
-
-                hits = searcher.search(query, numTotalHits).scoreDocs;
-            }
-
-            end = Math.min(hits.length, start + hitsPerPage);
-
-            for (int i = start; i < end; i++)
-            {
-                if (raw)
-                { // output raw format
-                    System.out.println("doc=" + hits[i].doc + " score=" + hits[i].score);
-                    continue;
-                }
-
-                Document doc = searcher.doc(hits[i].doc);
-                String path = doc.get("path");
-                if (path != null)
-                {
-                    System.out.println((i + 1) + ". " + path);
-                    String title = doc.get("title");
-                    if (title != null)
-                    {
-                        System.out.println("   Title: " + doc.get("title"));
-                    }
-                } else
-                {
-                    System.out.println((i + 1) + ". " + "No path for this document");
-                }
-
-            }
-
-            if (!interactive || end == 0)
-            {
-                break;
-            }
-
-            if (numTotalHits >= end)
-            {
-                boolean quit = false;
-                while (true)
-                {
-                    System.out.print("Press ");
-                    if (start - hitsPerPage >= 0)
-                    {
-                        System.out.print("(p)revious page, ");
-                    }
-                    if (start + hitsPerPage < numTotalHits)
-                    {
-                        System.out.print("(n)ext page, ");
-                    }
-                    System.out.println("(q)uit or enter number to jump to a page.");
-
-                    String line = in.readLine();
-                    if (line.length() == 0 || line.charAt(0) == 'q')
-                    {
-                        quit = true;
-                        break;
-                    }
-                    if (line.charAt(0) == 'p')
-                    {
-                        start = Math.max(0, start - hitsPerPage);
-                        break;
-                    } else if (line.charAt(0) == 'n')
-                    {
-                        if (start + hitsPerPage < numTotalHits)
-                        {
-                            start += hitsPerPage;
-                        }
-                        break;
-                    } else
-                    {
-                        int page = Integer.parseInt(line);
-                        if ((page - 1) * hitsPerPage < numTotalHits)
-                        {
-                            start = (page - 1) * hitsPerPage;
-                            break;
-                        } else
-                        {
-                            System.out.println("No such page");
-                        }
-                    }
-                }
-                if (quit)
-                    break;
-                end = Math.min(numTotalHits, start + hitsPerPage);
-            }
+    while (true) {
+      if (end > hits.length) {
+        System.out.println(
+            "Only results 1 - "
+                + hits.length
+                + " of "
+                + numTotalHits
+                + " total matching documents collected.");
+        System.out.println("Collect more (y/n) ?");
+        String line = in.readLine();
+        if (line.length() == 0 || line.charAt(0) == 'n') {
+          break;
         }
+
+        hits = searcher.search(query, numTotalHits).scoreDocs;
+      }
+
+      end = Math.min(hits.length, start + hitsPerPage);
+
+      for (int i = start; i < end; i++) {
+        if (raw) { // output raw format
+          System.out.println("doc=" + hits[i].doc + " score=" + hits[i].score);
+          continue;
+        }
+
+        Document doc = searcher.doc(hits[i].doc);
+        String path = doc.get("path");
+        if (path != null) {
+          System.out.println((i + 1) + ". " + path);
+          String title = doc.get("title");
+          if (title != null) {
+            System.out.println("   Title: " + doc.get("title"));
+          }
+        } else {
+          System.out.println((i + 1) + ". " + "No path for this document");
+        }
+      }
+
+      if (!interactive || end == 0) {
+        break;
+      }
+
+      if (numTotalHits >= end) {
+        boolean quit = false;
+        while (true) {
+          System.out.print("Press ");
+          if (start - hitsPerPage >= 0) {
+            System.out.print("(p)revious page, ");
+          }
+          if (start + hitsPerPage < numTotalHits) {
+            System.out.print("(n)ext page, ");
+          }
+          System.out.println("(q)uit or enter number to jump to a page.");
+
+          String line = in.readLine();
+          if (line.length() == 0 || line.charAt(0) == 'q') {
+            quit = true;
+            break;
+          }
+          if (line.charAt(0) == 'p') {
+            start = Math.max(0, start - hitsPerPage);
+            break;
+          } else if (line.charAt(0) == 'n') {
+            if (start + hitsPerPage < numTotalHits) {
+              start += hitsPerPage;
+            }
+            break;
+          } else {
+            int page = Integer.parseInt(line);
+            if ((page - 1) * hitsPerPage < numTotalHits) {
+              start = (page - 1) * hitsPerPage;
+              break;
+            } else {
+              System.out.println("No such page");
+            }
+          }
+        }
+        if (quit) break;
+        end = Math.min(numTotalHits, start + hitsPerPage);
+      }
     }
+  }
 }

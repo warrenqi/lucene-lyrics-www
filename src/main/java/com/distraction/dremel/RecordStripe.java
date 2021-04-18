@@ -1,7 +1,9 @@
 package com.distraction.dremel;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.collect.ImmutableList;
@@ -15,7 +17,8 @@ public class RecordStripe {
     Record recOne = recOne();
     preProcess(recOne);
     List<SplitRecord> writer = new ArrayList<RecordStripe.SplitRecord>();
-    recOne.writeDefLevel(0, 0, "", writer);
+    Set<String> seenFields = new HashSet<>();
+    recOne.writeDefLevel(0, 0, 0, "", seenFields, writer);
     System.out.println(writer);
   }
 
@@ -131,7 +134,14 @@ public class RecordStripe {
 
     // assume: no special treatment of required fields
     public void writeDefLevel(
-        int curDef, int nonNullPlusOne, String parentField, List<SplitRecord> writerToOutput) {
+        int curDef,
+        int nonNullDefPlusOne,
+        int curRep,
+        String parentField,
+        Set<String> seenFields,
+        List<SplitRecord> writerToOutput) {
+
+      int myRep = this.type == Multi.REPEATED ? curRep + 1 : curRep;
 
       if (this.children != null && !this.children.isEmpty()) {
         // a parent node with subgroups
@@ -140,12 +150,23 @@ public class RecordStripe {
           // this field is not specified and the children are nulls. record current level as last
           // non-null level
           for (Record child : this.children) {
-            child.writeDefLevel(1 + curDef, curDef, parentField + "_" + this.field, writerToOutput);
+            child.writeDefLevel(
+                1 + curDef,
+                curDef,
+                myRep,
+                parentField + "_" + this.field,
+                seenFields,
+                writerToOutput);
           }
         } else {
           for (Record child : this.children) {
             child.writeDefLevel(
-                1 + curDef, 1 + curDef, parentField + "_" + this.field, writerToOutput);
+                1 + curDef,
+                1 + curDef,
+                myRep,
+                parentField + "_" + this.field,
+                seenFields,
+                writerToOutput);
           }
         }
 
@@ -154,15 +175,19 @@ public class RecordStripe {
         String val = "NULL";
         int defLevel = curDef;
         String fullField = parentField + "_" + this.field;
+        int repLevelToWrite = seenFields.contains(fullField) ? myRep : 0;
+        seenFields.add(fullField);
         if (this.value == null) {
           // if the parent level had value != null, it passed 1+curDef
           // else, the parent level was null and its curDef was already 1 more than the actual
           // nonNull level
-          defLevel = nonNullPlusOne - 1;
+          defLevel = nonNullDefPlusOne - 1;
+          repLevelToWrite = defLevel;
         } else {
           val = this.value;
         }
-        writerToOutput.add(new SplitRecord(fullField, val, 0, defLevel));
+
+        writerToOutput.add(new SplitRecord(fullField, val, repLevelToWrite, defLevel));
       }
     }
   }

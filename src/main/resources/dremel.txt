@@ -9,7 +9,6 @@ message Document {
       optional string Country; }
     optional string Url; }}
 
-DocId
 Links.Backward
 Links.Forward
 Name.Language.Code
@@ -42,23 +41,7 @@ Name
     Code: 'en-gb'
     Country: 'gb'
   Url: null
-  
 
-[[r=0, d=2 : _root_links_links.forward = 20]
-, [r=0, d=2 : _root_links_links.forward = 40]
-, [r=0, d=2 : _root_links_links.forward = 60]
-, [r=0, d=3 : _root_name_name.lang_name.lang.code = en-us]
-, [r=0, d=3 : _root_name_name.lang_name.lang.country = us]
-, [r=0, d=3 : _root_name_name.lang_name.lang.code = en]
-, [r=0, d=2 : _root_name_name.lang_name.lang.country = NULL]
-, [r=0, d=2 : _root_name_name.url = http://a]
-, [r=0, d=1 : _root_name_name.lang_name.lang.code = NULL]
-, [r=0, d=1 : _root_name_name.lang_name.lang.country = NULL]
-, [r=0, d=2 : _root_name_name.url = http://b]
-, [r=0, d=3 : _root_name_name.lang_name.lang.code = en-gb]
-, [r=0, d=3 : _root_name_name.lang_name.lang.country = gb]
-, [r=0, d=1 : _root_name_name.url = NULL]
-]
 
 
 R = 0 (current repetition level)
@@ -69,20 +52,25 @@ R = 1 (we are repeating 'Links.Forward' of level 1)
 Links.Forward: 40, R:1, D:2
 R = 1 (we are repeating 'Links.Forward' again of level 1)
 Links.Forward: 60, R:1, D:2
+
 Back to the root level: R=0
 Name.Language.Code: en-us, R:0, D:2
 Name.Language.Country: us, R:0, D:3
+
 R = 2 (we are repeating 'Name.Language' of level 2)
 Name.Language.Code: en, R:2, D:2
 Name.Language.Country: NULL, R:2, D:2 (no value defined so D < 3)
+
 Name.Url: http://A, R:0, D:2
+
 R = 1 (we are repeating 'Name' of level 1)
 Name.Language.Code: NULL, R:1, D:1 (Only Name is defined so D = 1)
 Name.Language.Country: NULL, R:1, D:1
+
 Name.Url: http://B, R:1, D:2
 R = 1 (we are repeating 'Name' again of level 1)
 Name.Language.Code: en-gb, R:1, D:2
 Name.Language.Country: gb, R:1, D:3
 Name.Url: NULL, R:1, D:1
-]
-  
+
+

@@ -32,6 +32,7 @@ public class RecordStripe {
     return root;
   }
 
+  // record 1 from the paper
   public static Record recOne() {
     Record level3_enus = new Record(Multi.REQUIRED, "name.lang.code", "en-us", null);
     Record level3_en = new Record(Multi.REQUIRED, "name.lang.code", "en", null);
@@ -94,6 +95,11 @@ public class RecordStripe {
     return root;
   }
 
+  public static Record recTwo() {
+    Record root = new Record(Multi.OPTIONAL, "root", "root", null);
+    return root;
+  }
+
   public static void preProcess(Record r) {
     AtomicInteger maxRep = new AtomicInteger();
     AtomicInteger maxDef = new AtomicInteger();
@@ -145,14 +151,6 @@ public class RecordStripe {
      *
      * <p>At a group node with children: if this field is not specified and the children are nulls,
      * record current level as last non-null level
-     *
-     * @param curDef
-     * @param nonNullDefPlusOne
-     * @param parentRawRep
-     * @param parentWrittenRep
-     * @param parentField
-     * @param seenFields
-     * @param writerToOutput
      */
     public void writeRepDefLevels(
         int curDef,
@@ -172,42 +170,29 @@ public class RecordStripe {
         // a parent node with subgroups
         Set<String> nextLevelSeenFields = new HashSet<>(seenFields);
 
-        if (this.value == null) {
-          // this field is not specified and the children are nulls. record current level as last
-          // non-null level
-          for (Record child : this.children) {
-            child.writeRepDefLevels(
-                1 + curDef,
-                curDef,
-                rawRep,
-                repToWrite,
-                parentField + " / " + this.field,
-                nextLevelSeenFields,
-                writerToOutput);
-          }
-        } else {
-          for (Record child : this.children) {
-            child.writeRepDefLevels(
-                1 + curDef,
-                1 + curDef,
-                rawRep,
-                repToWrite,
-                parentField + " / " + this.field,
-                nextLevelSeenFields,
-                writerToOutput);
-          }
+        // if this field is not specified & children are nulls,
+        // then curDef is the last non-null level
+        int nextDefLevel = this.value == null ? curDef : 1 + curDef;
+        for (Record child : this.children) {
+          child.writeRepDefLevels(
+              1 + curDef,
+              nextDefLevel,
+              rawRep,
+              repToWrite,
+              parentField + " / " + this.field,
+              nextLevelSeenFields,
+              writerToOutput);
         }
-
       } else {
         // a value node
         String val = "NULL";
         int defLevel = curDef;
         if (this.value == null) {
-          // if the parent level had value != null, it passed 1+curDef
-          // else, the parent level was null and its curDef was already 1 more than the actual
-          // nonNull level
+          /**
+           * if the parent level had value != null, it passed 1+curDef else, the parent level was
+           * null and its curDef was already 1 more than the actual nonNull level
+           */
           defLevel = nonNullDefPlusOne - 1;
-          // repLevelToWrite = defLevel; // TODO wrong?
         } else {
           val = this.value;
         }
